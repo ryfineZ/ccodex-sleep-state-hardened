@@ -19,7 +19,7 @@ func (e *Engine) admin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 	switch r.URL.Path {
-	case "/__recorder/", "/__recorder/app.js", "/__recorder/style.css":
+	case "/__recorder/", "/__recorder/app.js", "/__recorder/style.css", "/__recorder/core.js":
 		if r.Method != "GET" {
 			localError(w, 405, "method_not_allowed")
 			return
@@ -27,6 +27,9 @@ func (e *Engine) admin(w http.ResponseWriter, r *http.Request) {
 		name, kind := "index.html", "text/html; charset=utf-8"
 		if strings.HasSuffix(r.URL.Path, "app.js") {
 			name, kind = "app.js", "text/javascript; charset=utf-8"
+		}
+		if strings.HasSuffix(r.URL.Path, "core.js") {
+			name, kind = "core.js", "text/javascript; charset=utf-8"
 		}
 		if strings.HasSuffix(r.URL.Path, "style.css") {
 			name, kind = "style.css", "text/css; charset=utf-8"
@@ -48,6 +51,10 @@ func (e *Engine) admin(w http.ResponseWriter, r *http.Request) {
 	}
 	if e.setup != nil && strings.HasPrefix(r.URL.Path, "/__recorder/api/setup/") {
 		e.setup.ServeHTTP(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/__recorder/api/state-core/") {
+		e.coreAPI(w, r)
 		return
 	}
 	switch {

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,9 +19,11 @@ import (
 )
 
 type Engine struct {
-	connectionMu sync.RWMutex
-	setup        *SetupController
-	launch       launchTicket
+	connectionProxy string
+	core            *StateCore
+	connectionMu    sync.RWMutex
+	setup           *SetupController
+	launch          launchTicket
 
 	overrideMu sync.RWMutex
 	override   ModelOverridePolicy
@@ -46,11 +49,19 @@ func New(c Config) (*Engine, error) {
 	tr := recorderTransport(c)
 	e := &Engine{config: c, target: target, transport: tr, store: store, token: rand.Text(), slots: make(chan struct{}, c.MaxConcurrent)}
 	e.override = ModelOverridePolicy{Enabled: c.ForceModelEnabled, Model: c.ForceModel, Revision: 1}
+	e.connectionProxy = c.ProxyURL
+	e.core = newStateCore(c.Core)
+	if err := e.core.configure(c.Core, target, c.ProxyURL, tr, c); err != nil {
+		e.core.close()
+		store.Close()
+		return nil, err
+	}
 	e.enabled.Store(true)
 	return e, nil
 }
 func (e *Engine) Token() string { return e.token }
 func (e *Engine) Close() {
+	e.core.close()
 	if t, ok := e.transport.(interface{ CloseIdleConnections() }); ok {
 		t.CloseIdleConnections()
 	}
@@ -59,6 +70,7 @@ func (e *Engine) Close() {
 func (e *Engine) Status() map[string]any {
 	out := e.store.Status()
 	out["recording"] = e.enabled.Load()
+	out["state_core"] = e.core.status()
 	out["model_override"] = e.ModelOverride()
 	out["mode"] = e.config.Mode
 	out["inflight"] = e.active.Load()
@@ -224,6 +236,13 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Model override is opt-in and already snapshotted; state/Cookie stay untouched.
 		},
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			lease, err := e.core.prepare(req)
+			if err != nil {
+				setFailure(coreErrorCode(err))
+				return nil, err
+			}
+			req = lease.request
+			rec.Core = lease.audit
 			rec.RequestHeaders = req.Header.Clone()
 			rec.OutgoingURI = recordedURI(req.URL, e.config.Mode == "full")
 			if req.Body != nil {
@@ -231,7 +250,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else {
 				a.feed(nil, io.EOF)
 			}
-			resp, err := transport.RoundTrip(req)
+			resp, err := e.core.roundTrip(lease, transport)
 			if err != nil {
 				setFailure("upstream_transport_error")
 				return nil, err
@@ -240,7 +259,11 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rec.HeadersMS = time.Since(started).Milliseconds()
 			rec.ResponseHeaders = resp.Header.Clone()
 			rec.Context.response(resp.Header)
-			resp.Body = &tap{source: resp.Body, sample: b, idle: time.Duration(e.config.IdleSeconds) * time.Second, onError: func(err error) {
+			idle := time.Duration(e.config.IdleSeconds) * time.Second
+			if lease.candidate != nil {
+				idle = 0
+			} // the inner core observer owns idle attribution
+			resp.Body = &tap{source: resp.Body, sample: b, idle: idle, onError: func(err error) {
 				if errors.Is(err, errIdle) {
 					setFailure("upstream_idle_timeout")
 				} else {
@@ -257,6 +280,14 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			var coreFailure *coreError
+			if errors.As(err, &coreFailure) {
+				if coreFailure.Retry > 0 {
+					w.Header().Set("Retry-After", strconv.Itoa(coreFailure.Retry))
+				}
+				localError(w, coreFailure.Status, coreFailure.Code)
+				return
+			}
 			var large *http.MaxBytesError
 			if errors.As(err, &large) {
 				localError(w, 413, "request_limit_during_forwarding")

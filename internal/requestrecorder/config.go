@@ -15,27 +15,28 @@ import (
 )
 
 type Config struct {
-	ForceModelEnabled    bool     `json:"force_model_enabled"`
-	ForceModel           string   `json:"force_model"`
-	RouteLabel           string   `json:"route_label,omitempty"`
-	Listen               string   `json:"listen"`
-	Upstream             string   `json:"upstream"`
-	ProxyURL             string   `json:"proxy_url,omitempty"`
-	Directory            string   `json:"directory"`
-	Mode                 string   `json:"mode"`
-	AllowedPaths         []string `json:"allowed_path_prefixes"`
-	CaptureMiB           int      `json:"capture_body_mib"`
-	DiskMiB              int      `json:"disk_quota_mib"`
-	MaxRecords           int      `json:"max_records"`
-	QueueSize            int      `json:"queue_size"`
-	MaxConcurrent        int      `json:"max_concurrent_requests"`
-	MaxRequestMiB        int      `json:"max_request_mib"`
-	HeaderTimeoutSeconds int      `json:"response_header_timeout_seconds"`
-	IdleSeconds          int      `json:"stream_idle_seconds"`
+	Core                 CorePolicy `json:"state_core"`
+	ForceModelEnabled    bool       `json:"force_model_enabled"`
+	ForceModel           string     `json:"force_model"`
+	RouteLabel           string     `json:"route_label,omitempty"`
+	Listen               string     `json:"listen"`
+	Upstream             string     `json:"upstream"`
+	ProxyURL             string     `json:"proxy_url,omitempty"`
+	Directory            string     `json:"directory"`
+	Mode                 string     `json:"mode"`
+	AllowedPaths         []string   `json:"allowed_path_prefixes"`
+	CaptureMiB           int        `json:"capture_body_mib"`
+	DiskMiB              int        `json:"disk_quota_mib"`
+	MaxRecords           int        `json:"max_records"`
+	QueueSize            int        `json:"queue_size"`
+	MaxConcurrent        int        `json:"max_concurrent_requests"`
+	MaxRequestMiB        int        `json:"max_request_mib"`
+	HeaderTimeoutSeconds int        `json:"response_header_timeout_seconds"`
+	IdleSeconds          int        `json:"stream_idle_seconds"`
 }
 
 func Default() Config {
-	return Config{
+	return Config{Core: coreDefaults(),
 		Listen: "127.0.0.1:17843", Upstream: "https://chatgpt.com", Directory: "../.local/recordings", Mode: "redacted",
 		AllowedPaths: []string{"/backend-api/codex/", "/backend-api/conversation", "/v1/"},
 		CaptureMiB:   2, DiskMiB: 256, MaxRecords: 2000, QueueSize: 8, MaxConcurrent: 8, MaxRequestMiB: 64, HeaderTimeoutSeconds: 30, IdleSeconds: 120,
@@ -69,6 +70,9 @@ func loopbackAddress(s string) bool {
 	return e == nil && x == nil && n > 0 && n <= 65535 && ip != nil && ip.IsLoopback()
 }
 func (c Config) Validate() error {
+	if err := c.Core.validate(); err != nil {
+		return err
+	}
 	if err := validateModelOverride(c.ForceModelEnabled, c.ForceModel); err != nil {
 		return err
 	}

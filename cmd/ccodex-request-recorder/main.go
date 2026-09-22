@@ -21,7 +21,7 @@ import (
 	"github.com/gylive/ccodex-sleep-state/internal/requestrecorder"
 )
 
-const version = "0.4.0-oneclick"
+const version = "0.5.0-state-cookie"
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {

@@ -1,23 +1,23 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>请求记录与模型证据</title><link rel="stylesheet" href="/__recorder/style.css"><script defer src="/__recorder/app.js"></script></head>
-<body><header><div><small>CCODEX · 独立观测工具</small><h1>Codex 请求记录</h1><p>双击启动 · 一键接入 · 正常使用 Codex</p></div><span id="state" class="badge">等待连接</span></header>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Codex State + Cookie</title><link rel="stylesheet" href="/__recorder/style.css"><script defer src="/__recorder/app.js"></script><script defer src="/__recorder/core.js"></script></head>
+<body><header><div><small>CCODEX · 采集 · 注入 · 观测</small><h1>Codex State + Cookie</h1><p>双击启动 · 一键接入 · 正常使用 Codex</p></div><span id="state" class="badge">等待连接</span></header>
 <section id="quick-start" class="quick-start" hidden>
-<div class="quick-heading"><span class="step-number">1</span><div><h2 id="setup-title">接入你正在使用的 Codex</h2><p id="setup-message">自动识别原上游，备份配置。无需填写 API 地址或复制登录凭据。</p></div></div>
+<div class="quick-heading"><span class="step-number">1</span><div><h2 id="setup-title">接入你正在使用的 Codex</h2><p id="setup-message">自动识别原上游，备份配置。无需复制登录凭据。</p></div></div>
 <div class="quick-actions"><button id="setup-connect" class="primary">一键接入 Codex</button><button id="setup-restore" disabled>恢复原连接</button><button id="setup-stop">恢复并退出</button></div>
-<p class="hint">接入后重启 Codex、新建会话；回复结束后，记录会自动出现在下方。关闭网页不会停止服务。</p>
+<p class="hint">接入后在下方开启核心采集与注入，再重启 Codex、新建会话。关闭网页不会停止服务。</p>
 <details class="connection-options"><summary>连接设置（通常不用改）</summary><div class="toolbar"><label>联网方式 <select id="proxy-mode"><option value="auto">自动（未找到本机代理时直连）</option><option value="direct">直连</option><option value="manual">手动填写代理</option></select></label><label id="proxy-input" hidden>代理地址 <input id="setup-proxy" placeholder="http://127.0.0.1:7890" autocomplete="off"></label></div><p id="setup-location" class="hint"></p></details>
-<p class="privacy-hint">接入时仅识别登录类型，不导入或刷新登录令牌。默认脱敏记录仍可能保存提示词和回复；不希望留存正文时请使用 metadata 模式。</p>
+<p class="privacy-hint">只借用客户端请求中的凭据。默认脱敏记录仍可能保存提示词和回复，不希望保存正文时使用 metadata 模式。</p>
 </section>
-<section class="notice"><strong>这里展示上游返回的模型标识，不是内部执行证明。</strong>不使用模型别名；不自动采集 state 或重发请求。强制改写默认关闭。</section>
-<section id="login" class="toolbar"><label>本地访问令牌 <input id="token" type="password" autocomplete="off" placeholder="使用启动时输出的完整面板地址，或粘贴令牌"></label><button id="connect">连接</button></section>
-<section class="toolbar"><button id="refresh">刷新</button><button id="toggle" disabled>暂停记录</button><label>筛选最近 200 条 <input id="filter" placeholder="路径、模型、状态或请求 ID"></label>
-<label>模型结果 <select id="verdict"><option value="">全部</option><option value="mismatch">标识不同</option><option value="conflict">证据冲突</option><option value="unknown">未知</option><option value="consistent">一致</option></select></label><span id="stats"></span></section>
-<section class="override-panel"><details><summary>可选：强制模型改写（默认关闭）</summary>
-<form id="force-form"><label><input type="checkbox" id="force-enabled" disabled> 强制模型改写（默认关闭）</label><label>目标模型 <input id="force-model" maxlength="256" placeholder="填写要发给上游的模型名称" autocomplete="off" disabled></label><button id="save-force" disabled>应用到后续请求</button></form>
-<p id="force-status">等待连接。关闭时原样转发；开启后仅改生成请求的顶层 model。</p>
-<p>开关仅作用于本次进程，重启读取配置文件。暂停记录不会关闭改写。强制请求目标模型不等于确认上游执行了该模型。</p>
-</details></section>
-<p id="error" role="alert"></p>
-<section class="observation-summary"><details><summary>按凭据作用域 / 配置路线 / 原始与出站模型统计（全部已保存记录）</summary><div id="groups"></div></details></section>
-<main><section class="list"><h2>请求列表 <small>结束后异步保存</small></h2><div id="records"><p>暂无记录。</p></div></section><section class="detail"><div class="toolbar"><h2>记录详情</h2><button id="export" disabled>导出 JSON</button></div><p id="selected">选择一条请求，查看模型证据和请求 / 响应。</p><div id="details"></div></section></main>
-<footer>原始字节仅在显式启用 full 模式后保存。时间是应用层读取时间，不是网络包发送时间；截断或丢弃会明确显示。配置路线标签并不证明上游网关内部的真实出口。</footer></body></html>
+<section class="notice"><strong>模型标识不是内部执行证明。</strong>核心模式可能额外消耗采集额度；跨 turn 复用属于实验功能。仅记录模式不采集，正式请求均不自动重发。模型改写默认关闭。</section>
+<section class="core-panel"><h2>核心功能：State + Cookie 采集与注入</h2><p id="core-status">等待连接。</p>
+<form id="core-form"><label><input id="core-enabled" type="checkbox"> 开启采集与注入</label><label>账号规则 <select id="core-account"><option value="auto">自动识别</option><option value="personal">个人</option><option value="team">Team / Business</option></select></label><button id="core-apply" class="primary">应用核心设置</button>
+<details><summary>采集与代理设置（通常不用改）</summary><div class="toolbar">
+<label>本地新鲜度上限（秒）<input type="number" id="core-fresh" min="30" max="600" value="120"></label><label>两轮采集间隔（秒）<input type="number" id="core-cooldown" min="30" max="3600" value="30"></label><label>单次超时（秒）<input type="number" id="core-timeout" min="1" max="60" value="20"></label><label>每轮最多尝试<input type="number" id="core-attempts" min="1" max="6" value="2"></label><label>每凭据每小时最多采集<input type="number" id="core-budget" min="1" max="120" value="30"></label></div>
+<label>可选采集出口（每行一个 HTTP / SOCKS 代理）<textarea id="core-proxies" rows="3" placeholder="留空使用当前连接出口；填写后仅使用这些出口，不退回直连。含密码地址仅保留在内存。"></textarea></label><p class="hint">120 秒是本地复用上限，不是上游保证。state 长度不是模型质量证明。参数仅本次进程生效。</p></details></form>
+<div id="core-sessions"><p>先开启核心功能，再到 Codex 正常发消息。</p></div><details><summary>代理健康状态</summary><div id="core-routes"></div></details><details><summary>最近采集结果</summary><div id="core-probes"></div></details></section>
+<section id="login" class="toolbar"><label>本地访问令牌 <input id="token" type="password" autocomplete="off" placeholder="双击启动自动打开面板，或粘贴令牌"></label><button id="connect">连接</button></section>
+<section class="toolbar"><button id="refresh">刷新</button><button id="toggle" disabled>暂停记录</button><label>筛选最近 200 条 <input id="filter" placeholder="路径、模型、状态或请求 ID"></label><label>模型结果 <select id="verdict"><option value="">全部</option><option value="mismatch">标识不同</option><option value="conflict">证据冲突</option><option value="unknown">未知</option><option value="consistent">一致</option></select></label><span id="stats"></span></section>
+<section class="override-panel"><details><summary>可选：强制模型改写（默认关闭）</summary><form id="force-form"><label><input type="checkbox" id="force-enabled" disabled> 强制模型改写</label><label>目标模型 <input id="force-model" maxlength="256" placeholder="填写要发给上游的模型名称" autocomplete="off" disabled></label><button id="save-force" disabled>应用到后续请求</button></form><p id="force-status">等待连接。</p><p>模型改写、核心采集和记录是三个独立开关。暂停记录不会关闭另外两个功能。无模型别名映射。</p></details></section>
+<p id="error" role="alert"></p><section class="observation-summary"><details><summary>按凭据作用域 / 配置路线 / 模型统计</summary><div id="groups"></div></details></section>
+<main><section class="list"><h2>请求列表 <small>结束后异步保存</small></h2><div id="records"><p>暂无记录。</p></div></section><section class="detail"><div class="toolbar"><h2>记录详情</h2><button id="export" disabled>导出 JSON</button></div><p id="selected">选择一条请求，查看注入情况与模型证据。</p><div id="details"></div></section></main>
+<footer>state / Cookie 缓存仅存内存。完整抓包仅在显式 full 模式保存原始捕获，受大小限制；可能包含敏感信息。退出程序前使用「恢复并退出」。</footer></body></html>

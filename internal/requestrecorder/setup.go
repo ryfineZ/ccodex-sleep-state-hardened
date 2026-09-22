@@ -206,6 +206,10 @@ func (c *SetupController) Connect(ctx context.Context, proxyMode, proxy string) 
 	old := c.e.transport
 	c.e.target = &url.URL{Scheme: u.Scheme, Host: u.Host}
 	c.e.transport = tr
+	c.e.connectionProxy = cfg.ProxyURL
+	cp := c.e.core.options()
+	cp.Enabled = false
+	_ = c.e.core.configure(cp, c.e.target, cfg.ProxyURL, tr, cfg)
 	c.e.connectionMu.Unlock()
 	if old, ok := old.(interface{ CloseIdleConnections() }); ok {
 		old.CloseIdleConnections()
@@ -229,6 +233,7 @@ func (c *SetupController) Restore() error {
 	if err := codexconfig.Restore(c.dir); err != nil {
 		return errors.New("恢复被保护性停止：配置被其他程序修改，或备份校验失败。原文件和备份均保留；不要删除恢复记录")
 	}
+	c.e.core.disable()
 	c.pending = false
 	c.managed = false
 	c.upstreamHost = ""

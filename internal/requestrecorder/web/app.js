@@ -14,7 +14,7 @@ async function api(path,body){
 }
 async function guarded(fn){if(busy)return;busy=true;$("error").textContent="";try{await fn();}catch(e){$("error").textContent=e.message;}finally{busy=false;}}
 async function refresh(){
- const [s,list,groups]=await Promise.all([api("status"),api("records?limit=200"),api("observations")]);renderGroups(groups);renderOverride(s.model_override);rows=list;recording=s.recording;renderSetup(s.setup);
+ const [s,list,groups]=await Promise.all([api("status"),api("records?limit=200"),api("observations")]);renderGroups(groups);renderOverride(s.model_override);if(typeof renderCore==="function")renderCore(s.state_core);rows=list;recording=s.recording;renderSetup(s.setup);
  sessionStorage.setItem(storageKey,token);$("login").hidden=true;
  $("state").textContent=(recording?"记录中":"已暂停记录")+" · "+s.mode;
  $("toggle").disabled=false;$("toggle").textContent=recording?"暂停记录（继续转发）":"开始记录";
@@ -25,6 +25,7 @@ function renderRows(){
  $("records").replaceChildren();const q=$("filter").value.toLowerCase();
  for(const r of rows.filter(x=>JSON.stringify(x).toLowerCase().includes(q)&&(!$("verdict").value||x.model_verdict===$("verdict").value))){
   const b=node("button","","record");b.append(node("strong",labels[r.model_verdict]||r.model_verdict,"verdict "+r.model_verdict),node("span",`${r.requested_model||"原始模型未知"} → ${r.forwarded_model||"出站模型未知"} → ${(r.declared_models||[]).join(" / ")||"未返回模型证据"}`),node("small",`${r.status} · ${r.method} ${r.uri} · ${r.duration_ms} ms`),node("small",`${new Date(r.started_at).toLocaleString()} · ${r.outcome}${r.evidence_limited?" · 观测受限":""}`));
+  if(r.state_core?.injected)b.append(node("strong",`注入 ${r.state_core.state_length} 字符 state + ${r.state_core.cookie_count} 个 Cookie · ${r.state_core.route}`));
   b.append(node("small",quotaText(r.quota_observations)),node("small",`出站模型 ${r.forwarded_model||"未知"} · 响应头 ${r.response_headers_ms} ms · ${r.configured_route_label||"未标注路线"}`));
   b.addEventListener("click",()=>guarded(async()=>{selected=await api("records/"+r.id);renderDetail();}));$("records").append(b);
  }
@@ -35,6 +36,7 @@ function renderDetail(){
  const r=selected;$("selected").textContent=`${r.id} · ${r.mode} · ${r.outcome}`;$("export").disabled=false;$("details").replaceChildren();
  const m=r.model_detection;
  $("details").append(section("强制模型改写决策（请求开始时的快照）",r.model_override||{applied:false},Boolean(r.model_override?.applied)));
+ $("details").append(section("State + Cookie 注入快照",r.state_core||{enabled:false},Boolean(r.state_core?.injected)));
  $("details").append(section("额度窗口观测（不是实时余额）",r.quota_observations||[],true),section("state / Cookie / 凭据作用域指纹",r.protocol_context));
  $("details").append(section("模型证据 · "+(labels[m.verdict]||m.verdict),m,true));
  $("details").append(section("捕获完整性",{request:{bytes:r.request_body.observed_bytes,captured:r.request_body.captured_bytes,truncated:r.request_body.truncated,eof:r.request_body.observed_eof,note:r.request_body.analysis_note},response:{bytes:r.response_body.observed_bytes,captured:r.response_body.captured_bytes,truncated:r.response_body.truncated,eof:r.response_body.observed_eof,note:r.response_body.analysis_note,events_limited:r.response_body.events_limited,timing_limited:r.response_body.timing_limited}},true));
@@ -113,5 +115,5 @@ $("setup-stop").addEventListener("click",()=>guarded(async()=>{
  await api("setup/stop",{confirm:true});token="";sessionStorage.removeItem(storageKey);
  $("setup-message").textContent="已恢复原连接并退出。重启 Codex 后按原来的方式使用；下次双击启动即可。";
  $("setup-title").textContent="已退出";$("state").textContent="服务已停止";
- for(const id of ["setup-connect","setup-restore","setup-stop","toggle","save-force"])$(id).disabled=true;
+ for(const id of ["setup-connect","setup-restore","setup-stop","toggle","save-force","core-apply"])$(id).disabled=true;
 }));

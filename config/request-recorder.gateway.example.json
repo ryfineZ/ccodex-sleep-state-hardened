@@ -16,5 +16,14 @@
   "response_header_timeout_seconds": 30,
   "stream_idle_seconds": 120,
   "force_model_enabled": false,
-  "force_model": ""
+  "force_model": "",
+  "state_core": {
+    "enabled": false,
+    "account_mode": "auto",
+    "freshness_seconds": 120,
+    "probe_cooldown_seconds": 30,
+    "probe_timeout_seconds": 20,
+    "max_probes_per_round": 2,
+    "probe_budget_per_hour": 30
+  }
 }

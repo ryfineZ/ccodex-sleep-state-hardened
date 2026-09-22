@@ -21,6 +21,7 @@ var idPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 const recordFileLimit = 96 << 20
 
 type Record struct {
+	Core            CoreAudit          `json:"state_core"`
 	IncomingRequest *Body              `json:"incoming_request_body,omitempty"`
 	ModelOverride   ModelOverrideAudit `json:"model_override"`
 	Context         ProtocolContext    `json:"protocol_context"`
@@ -100,6 +101,7 @@ func (p pending) analyse() Record {
 }
 
 type Summary struct {
+	Core       CoreAudit     `json:"state_core"`
 	Scope      string        `json:"credential_scope_fingerprint"`
 	Route      string        `json:"configured_route_label"`
 	Upstream   string        `json:"upstream_origin"`
@@ -120,7 +122,7 @@ type Summary struct {
 }
 
 func summarize(r Record) Summary {
-	return Summary{ID: r.ID, Started: r.Started, Method: r.Method, URI: r.URI, Status: r.ClientStatus, Outcome: r.Outcome, DurationMS: r.DurationMS, Requested: r.Model.Requested, Declared: r.Model.Declared, Verdict: r.Model.Verdict, Limited: r.Model.Limited, Scope: r.Context.Scope, Route: r.Context.Route, Upstream: r.Upstream, Forwarded: r.Model.Forwarded, HeadersMS: r.HeadersMS, Quota: r.Quota}
+	return Summary{Core: r.Core, ID: r.ID, Started: r.Started, Method: r.Method, URI: r.URI, Status: r.ClientStatus, Outcome: r.Outcome, DurationMS: r.DurationMS, Requested: r.Model.Requested, Declared: r.Model.Declared, Verdict: r.Model.Verdict, Limited: r.Model.Limited, Scope: r.Context.Scope, Route: r.Context.Route, Upstream: r.Upstream, Forwarded: r.Model.Forwarded, HeadersMS: r.HeadersMS, Quota: r.Quota}
 }
 
 type Store struct {
