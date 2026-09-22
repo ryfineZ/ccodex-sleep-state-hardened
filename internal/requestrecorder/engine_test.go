@@ -114,9 +114,14 @@ func TestIndependentForwardingCookieStateNoReplayAndRedaction(t *testing.T) {
 	}
 	entries, _ := os.ReadDir(e.config.Directory)
 	for _, entry := range entries {
-		info, _ := entry.Info()
-		if info.Mode().Perm() != 0600 {
-			t.Fatal("private file permissions")
+		f, err := os.Open(filepath.Join(e.config.Directory, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = checkPrivateHandle(f, false)
+		f.Close()
+		if err != nil {
+			t.Fatal("private file permissions:", err)
 		}
 	}
 }

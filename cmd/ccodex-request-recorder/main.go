@@ -19,7 +19,7 @@ import (
 	"github.com/gylive/ccodex-sleep-state/internal/requestrecorder"
 )
 
-const version = "0.3.1-model-override"
+const version = "0.3.2-windows-acl"
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {

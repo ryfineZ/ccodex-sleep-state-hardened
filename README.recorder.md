@@ -1,6 +1,6 @@
 # 独立请求记录与模型证据工具
 
-版本：`0.3.1-model-override`。入口：`cmd/ccodex-request-recorder`。
+版本：`0.3.2-windows-acl`。入口：`cmd/ccodex-request-recorder`。
 
 这是单独运行的应用层 HTTP/SSE 记录器，不是系统抓包或 HTTPS 中间人代理。它不会安装证书、修改系统代理、读取 Codex 登录文件、采集或注入 state、管理 Cookie 池，或自动重放请求。只接收主动接入本地端口的客户端流量；模型改写是可选开关，默认关闭。
 
@@ -71,7 +71,7 @@
 | `redacted`（默认） | 结构化 JSON/SSE，隐藏已知凭据字段；仍可能保存提示词、回复及其他业务隐私。 |
 | `full` | 完整头部与捕获到的原始 body 分片（Base64），仍受大小限制；必须额外传入 `-allow-sensitive-recording`。 |
 
-记录目录默认为 `.local/recordings`，目录 0700、文件 0600；拒绝不安全目录或记录符号链接。默认每方向只保留前 2 MiB，最多可配置 8 MiB；解压分析另有 16 MiB 上限。SSE 单事件 256 KiB，事件展示最多 1024 条，额度快照最多 64 条。超限明确标记，不能称为完整抓包。
+记录目录默认为 `.local/recordings`，macOS/Linux 使用目录 0700、文件 0600；Windows 在创建记录目录时设置受保护的 DACL，只授予当前进程用户及 SYSTEM 访问，子文件继承该 ACL。写入敏感内容前及读取已有记录时均检查实际打开的文件句柄。拒绝不安全目录、记录符号链接及 Windows 重解析点；不会自动放宽或重设已有目录权限。默认每方向只保留前 2 MiB，最多可配置 8 MiB；解压分析另有 16 MiB 上限。SSE 单事件 256 KiB，事件展示最多 1024 条，额度快照最多 64 条。超限明确标记，不能称为完整抓包。
 
 关闭模型改写时，前台仅作有界内存取样，后台串行分析和写盘。开启改写时，生成请求需要在转发前有界缓冲和解析。默认磁盘 256 MiB、2000 条记录。队列/磁盘额度满或写盘失败会增加丢弃计数，不阻塞正常回复，也不静默删除旧证据。暂停仅影响之后开始的记录，正在进行的记录保留，转发继续。
 
@@ -98,3 +98,9 @@ HTTP `GET /__recorder/api/status`、`GET /__recorder/api/records?limit=200`、`G
 `docs/ccodex-rotate-review.md` 记录了针对 ccodex-rotate 固定提交的审查、已吸收的设计和明确未移植的行为。原采集器及旧面板没有因本次独立工具而被替换；可靠转发程序仍是独立的 `ccodex-reliable-proxy`。
 
 协议依据：OpenAI Responses streaming events，`https://developers.openai.com/api/reference/resources/responses/streaming-events`；Codex 额度解析，`https://github.com/openai/codex/blob/main/codex-rs/codex-api/src/rate_limits.rs`。这些是可观测字段的依据，不保证任一自定义上游都按同样协议返回。
+
+## Windows 存储兼容性（0.3.2）
+
+Windows 不用 `chmod 0700/0600` 判断保密性，而使用原生 ACL。需要支持 ACL 的文件系统（例如 NTFS）；不能验证权限时停止记录器启动。已经存在的共享目录不会被程序擅自修改：为 `directory` 配置一个尚不存在的专用子目录，再启动以便程序原子创建私有目录。不要直接使用 Downloads、工作区根目录或多用户共享目录。
+
+保护目标是阻止普通其他用户读取抓包文件，不对当前用户的其他程序、Windows SYSTEM 或拥有系统管理特权的管理员提供隔离，也不构成磁盘加密。模型改写仍默认关闭；本次没有恢复模型别名功能。

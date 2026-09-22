@@ -137,19 +137,12 @@ type Store struct {
 }
 
 func NewStore(c Config) (*Store, error) {
-	if err := os.MkdirAll(c.Directory, 0700); err != nil {
-		return nil, errors.New("cannot create private recording directory")
-	}
-	info, err := os.Lstat(c.Directory)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
-		return nil, errors.New("recording directory must be a real private directory (0700)")
-	}
-	root, err := os.OpenRoot(c.Directory)
+	root, err := openRecordingRoot(c.Directory)
 	if err != nil {
 		return nil, err
 	}
 	s := &Store{root: root, config: c, queue: make(chan pending, c.QueueSize), done: make(chan struct{}), summaries: map[string]Summary{}}
-	entries, err := os.ReadDir(c.Directory)
+	entries, err := recordingEntries(root)
 	if err != nil {
 		root.Close()
 		return nil, err
@@ -232,7 +225,12 @@ func (s *Store) save(r Record) {
 	tmp, name := r.ID+".part", r.ID+".json"
 	f, err := s.root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err == nil {
-		_, err = f.Write(data)
+		// Check the open handle before writing any sensitive bytes. New Windows
+		// files inherit the verified directory DACL; a changed ACL fails closed.
+		err = checkPrivateHandle(f, false)
+		if err == nil {
+			_, err = f.Write(data)
+		}
 		if err == nil {
 			err = f.Sync()
 		}
@@ -273,6 +271,10 @@ func (s *Store) Read(id string) (Record, error) {
 		return r, errors.New("record unavailable")
 	}
 	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !os.SameFile(info, opened) || checkPrivateHandle(f, false) != nil {
+		return r, errors.New("record unavailable or no longer private")
+	}
 	d := json.NewDecoder(io.LimitReader(f, recordFileLimit+1))
 	if d.Decode(&r) != nil || d.Decode(new(any)) != io.EOF || r.ID != id || r.Schema != 1 {
 		return r, errors.New("invalid record")

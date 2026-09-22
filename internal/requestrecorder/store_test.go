@@ -36,19 +36,24 @@ func TestQueueFullNonblockingAndQuotaDrops(t *testing.T) {
 func TestPrivateDirectoryAndSymlinkProtection(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "public")
-	os.Mkdir(dir, 0755)
+	makePublicTestDirectory(t, dir)
 	c := Default()
 	c.Directory = dir
 	if s, err := NewStore(c); err == nil {
 		s.Close()
 		t.Fatal("public directory accepted")
 	}
-	c.Directory = filepath.Join(root, "link")
-	os.Symlink(dir, c.Directory)
-	if s, err := NewStore(c); err == nil {
-		s.Close()
-		t.Fatal("symlink accepted")
-	}
+	t.Run("directory_symlink", func(t *testing.T) {
+		linked := c
+		linked.Directory = filepath.Join(root, "link")
+		if err := os.Symlink(dir, linked.Directory); err != nil {
+			t.Skipf("symlink creation unavailable: %v", err)
+		}
+		if s, err := NewStore(linked); err == nil {
+			s.Close()
+			t.Fatal("symlink accepted")
+		}
+	})
 	c.Directory = filepath.Join(root, "private")
 	s, err := NewStore(c)
 	if err != nil {
@@ -58,10 +63,14 @@ func TestPrivateDirectoryAndSymlinkProtection(t *testing.T) {
 	outside := filepath.Join(root, "secret.json")
 	data, _ := json.Marshal(Record{Schema: 1, ID: strings.Repeat("b", 32)})
 	os.WriteFile(outside, data, 0600)
-	os.Symlink(outside, filepath.Join(c.Directory, strings.Repeat("b", 32)+".json"))
-	if _, err := s.Read(strings.Repeat("b", 32)); err == nil {
-		t.Fatal("symlink read exposed outside data")
-	}
+	t.Run("file_symlink", func(t *testing.T) {
+		if err := os.Symlink(outside, filepath.Join(c.Directory, strings.Repeat("b", 32)+".json")); err != nil {
+			t.Skipf("symlink creation unavailable: %v", err)
+		}
+		if _, err := s.Read(strings.Repeat("b", 32)); err == nil {
+			t.Fatal("symlink read exposed outside data")
+		}
+	})
 	if _, err := s.Read("../../secret"); err == nil {
 		t.Fatal("path traversal")
 	}
