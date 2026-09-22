@@ -1,0 +1,22 @@
+{
+  "listen": "127.0.0.1:17842",
+  "upstream": "https://chatgpt.com/backend-api/codex",
+  "routes": [
+    {
+      "id": "proxy-a",
+      "proxy_url": "http://127.0.0.1:7890"
+    },
+    {
+      "id": "proxy-b",
+      "proxy_url": "socks5://127.0.0.1:1080"
+    }
+  ],
+  "failure_threshold": 2,
+  "circuit_base_seconds": 30,
+  "circuit_max_seconds": 300,
+  "session_cookie_seconds": 180,
+  "max_request_mib": 64,
+  "response_header_seconds": 30,
+  "stream_idle_seconds": 90,
+  "max_concurrent_requests": 32
+}

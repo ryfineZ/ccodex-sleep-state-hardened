@@ -1,0 +1,35 @@
+/.work/
+/dist/
+/coverage.out
+*.test
+*.exe
+.DS_Store
+/config.local.json
+/runtime/
+/ccodex-sleep-state
+/vendor/
+/config.json
+/auth.json
+/.env
+/logs/
+/state/
+/subscriptions*
+
+/apikey.txt
+
+# Local hardened build and private configuration
+.local/
+bin/
+config/local*.json
+
+# Keep recordings, local credentials and build outputs out of public commits
+/ccodex-request-recorder
+/ccodex-reliable-proxy
+/.env.*
+!/.env.example
+/recordings/
+/captures/
+*.pcap
+*.pcapng
+*.har
+*.log

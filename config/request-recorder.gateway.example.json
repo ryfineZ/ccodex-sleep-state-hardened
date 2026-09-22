@@ -1,0 +1,20 @@
+{
+  "listen": "127.0.0.1:17843",
+  "upstream": "http://127.0.0.1:17842",
+  "directory": "../.local/recordings-via-gateway",
+  "mode": "redacted",
+  "route_label": "via-reliable-proxy-not-actual-exit",
+  "allowed_path_prefixes": [
+    "/backend-api/codex/"
+  ],
+  "capture_body_mib": 2,
+  "disk_quota_mib": 256,
+  "max_records": 2000,
+  "queue_size": 8,
+  "max_concurrent_requests": 8,
+  "max_request_mib": 64,
+  "response_header_timeout_seconds": 30,
+  "stream_idle_seconds": 120,
+  "force_model_enabled": false,
+  "force_model": ""
+}

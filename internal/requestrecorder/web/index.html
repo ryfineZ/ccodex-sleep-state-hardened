@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>请求记录与模型证据</title><link rel="stylesheet" href="/__recorder/style.css"><script defer src="/__recorder/app.js"></script></head>
+<body><header><div><small>CCODEX · 独立观测工具</small><h1>请求记录与模型证据</h1><p>记录接入本端口的 HTTP / SSE 请求；模型改写默认关闭，不采集或替换 state，不重发请求。</p></div><span id="state" class="badge">等待连接</span></header>
+<section class="notice"><strong>模型检测 ≠ 内部执行验证。</strong>这里显示上游宣告的模型及证据位置。只比较原始模型标识，不进行别名映射。主动改写与上游返回分开记录。额度是捕获时的上游快照，不是实时余额。脱敏模式仍可能保留提示词和回复。</section>
+<section id="login" class="toolbar"><label>本地访问令牌 <input id="token" type="password" autocomplete="off" placeholder="使用启动时输出的完整面板地址，或粘贴令牌"></label><button id="connect">连接</button></section>
+<section class="toolbar"><button id="refresh">刷新</button><button id="toggle" disabled>暂停记录</button><label>筛选最近 200 条 <input id="filter" placeholder="路径、模型、状态或请求 ID"></label>
+<label>模型结果 <select id="verdict"><option value="">全部</option><option value="mismatch">标识不同</option><option value="conflict">证据冲突</option><option value="unknown">未知</option><option value="consistent">一致</option></select></label><span id="stats"></span></section>
+<section class="override-panel">
+<form id="force-form"><label><input type="checkbox" id="force-enabled" disabled> 强制模型改写（默认关闭）</label><label>目标模型 <input id="force-model" maxlength="256" placeholder="填写要发给上游的模型名称" autocomplete="off" disabled></label><button id="save-force" disabled>应用到后续请求</button></form>
+<p id="force-status">等待连接。关闭时原样转发；开启后仅改生成请求的顶层 model。</p>
+<p>开关仅作用于本次进程，重启读取配置文件。暂停记录不会关闭改写。强制请求目标模型不等于确认上游执行了该模型。</p>
+</section>
+<p id="error" role="alert"></p>
+<section class="observation-summary"><details><summary>按凭据作用域 / 配置路线 / 原始与出站模型统计（全部已保存记录）</summary><div id="groups"></div></details></section>
+<main><section class="list"><h2>请求列表 <small>结束后异步保存</small></h2><div id="records"><p>暂无记录。</p></div></section><section class="detail"><div class="toolbar"><h2>记录详情</h2><button id="export" disabled>导出 JSON</button></div><p id="selected">选择一条请求，查看模型证据和请求 / 响应。</p><div id="details"></div></section></main>
+<footer>原始字节仅在显式启用 full 模式后保存。时间是应用层读取时间，不是网络包发送时间；截断或丢弃会明确显示。配置路线标签并不证明上游网关内部的真实出口。</footer></body></html>

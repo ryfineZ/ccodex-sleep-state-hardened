@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+go test -count=1 ./...
+go test -race -count=1 ./internal/reliableproxy ./internal/routehealth ./internal/cookiebundle ./cmd/ccodex-reliable-proxy
+go vet ./...
