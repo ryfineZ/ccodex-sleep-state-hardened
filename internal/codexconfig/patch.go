@@ -46,14 +46,17 @@ func PatchWithOptions(original []byte, baseURL string, options Options) ([]byte,
 			return nil, errors.New("provider name already exists; restore the previous service transaction first")
 		}
 	}
-	model := options.Model
-	if model == "" {
-		model = settings.Model
+	replacements := map[string]string{"model_provider": strconv.Quote(provider), "openai_base_url": strconv.Quote(baseURL)}
+	if !options.PreserveModel {
+		model := options.Model
+		if model == "" {
+			model = settings.Model
+		}
+		if !settings.SupportedModel(model) {
+			return nil, errors.New("unsupported managed model")
+		}
+		replacements["model"] = strconv.Quote(model)
 	}
-	if model != "gpt-6-astra" && model != "gpt-5.6-sol" && model != "gpt-5.6-terra" {
-		return nil, errors.New("unsupported managed model")
-	}
-	replacements := map[string]string{"model": strconv.Quote(model), "model_provider": strconv.Quote(provider), "openai_base_url": strconv.Quote(baseURL)}
 	var edits []edit
 	var parser unstable.Parser
 	parser.Reset(original)

@@ -36,13 +36,23 @@ func (e *Engine) admin(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(b)
 		return
 	}
+	if r.URL.Path == "/__recorder/api/launch" {
+		e.exchangeLaunch(w, r)
+		return
+	}
 	origin := r.Header.Get("Origin")
 	site := r.Header.Get("Sec-Fetch-Site")
 	if (origin != "" && origin != "http://"+e.config.Listen) || (site != "" && site != "same-origin" && site != "none") || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Recorder-Token")), []byte(e.token)) != 1 {
 		localError(w, 403, "recorder_token_required")
 		return
 	}
+	if e.setup != nil && strings.HasPrefix(r.URL.Path, "/__recorder/api/setup/") {
+		e.setup.ServeHTTP(w, r)
+		return
+	}
 	switch {
+	case r.URL.Path == "/__recorder/api/new-launch" && r.Method == "POST":
+		responseJSON(w, 200, map[string]string{"ticket": e.launch.renew()})
 	case r.URL.Path == "/__recorder/api/status" && r.Method == "GET":
 		responseJSON(w, 200, e.Status())
 	case r.URL.Path == "/__recorder/api/observations" && r.Method == "GET":

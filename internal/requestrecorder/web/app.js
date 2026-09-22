@@ -2,18 +2,19 @@
 const $=id=>document.getElementById(id);
 const labels={consistent:"标识一致",mismatch:"标识不同",conflict:"证据冲突",unknown:"未知",observed:"已观测 / 请求模型未知"};
 const storageKey="ccodex-recorder-token";
+const launch=new URLSearchParams(location.hash.slice(1)).get("launch")||"";
 let token=new URLSearchParams(location.hash.slice(1)).get("token")||sessionStorage.getItem(storageKey)||"";
 if(location.hash)history.replaceState(null,"",location.pathname);
 let rows=[],selected=null,recording=false,busy=false,forceDirty=false,forceRevision=0;
 function node(tag,text,cls){const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;}
 async function api(path,body){
  const r=await fetch("/__recorder/api/"+path,{method:body?"POST":"GET",headers:{"X-Recorder-Token":token,...(body?{"Content-Type":"application/json"}:{})},...(body?{body:JSON.stringify(body)}:{})});
- if(!r.ok)throw new Error(r.status===403?"令牌无效。请使用当前进程启动时输出的面板地址。":"操作失败，HTTP "+r.status);
+ if(!r.ok){let detail;try{detail=await r.json();}catch{}throw new Error(detail?.message||(r.status===403?"连接已过期，请再次双击启动文件打开面板。":"操作未完成，HTTP "+r.status));}
  return r.json();
 }
 async function guarded(fn){if(busy)return;busy=true;$("error").textContent="";try{await fn();}catch(e){$("error").textContent=e.message;}finally{busy=false;}}
 async function refresh(){
- const [s,list,groups]=await Promise.all([api("status"),api("records?limit=200"),api("observations")]);renderGroups(groups);renderOverride(s.model_override);rows=list;recording=s.recording;
+ const [s,list,groups]=await Promise.all([api("status"),api("records?limit=200"),api("observations")]);renderGroups(groups);renderOverride(s.model_override);rows=list;recording=s.recording;renderSetup(s.setup);
  sessionStorage.setItem(storageKey,token);$("login").hidden=true;
  $("state").textContent=(recording?"记录中":"已暂停记录")+" · "+s.mode;
  $("toggle").disabled=false;$("toggle").textContent=recording?"暂停记录（继续转发）":"开始记录";
@@ -48,7 +49,15 @@ $("connect").addEventListener("click",()=>guarded(async()=>{token=$("token").val
 $("refresh").addEventListener("click",()=>guarded(refresh));$("filter").addEventListener("input",renderRows);
 $("toggle").addEventListener("click",()=>guarded(async()=>{await api("capture",{enabled:!recording});await refresh();}));
 $("export").addEventListener("click",()=>{if(!selected)return;if(!confirm("记录可能包含提示词、回复和隐私信息；full 模式还可能含登录凭据。确认导出到本机？"))return;const u=URL.createObjectURL(new Blob([JSON.stringify(selected,null,2)],{type:"application/json"}));const a=document.createElement("a");a.href=u;a.download=selected.id+".json";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);});
-if(token)guarded(refresh);
+async function bootstrap(){
+ if(launch){
+  const r=await fetch("/__recorder/api/launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ticket:launch})});
+  if(!r.ok)throw new Error("启动链接已过期或已使用，请再次双击启动文件。不会启动第二个服务。");
+  token=(await r.json()).token;
+ }
+ if(token)await refresh();
+}
+guarded(bootstrap);
 setInterval(()=>{if(token&&!document.hidden&&!busy)guarded(refresh);},3000);
 
 function quotaText(windows){
@@ -83,3 +92,26 @@ $("force-form").addEventListener("submit",event=>{event.preventDefault();guarded
  if(revision===forceRevision)forceDirty=false;
  await refresh();
 });});
+
+function renderSetup(s){
+ $("quick-start").hidden=!s;if(!s)return;
+ $("setup-message").textContent=s.message;
+ $("setup-title").textContent=s.conflict?"连接发生变化，需要处理":s.managed?"已接入，去 Codex 发一条消息":s.recovery_pending?"恢复上次的连接配置":"先接入 Codex";
+ $("setup-connect").disabled=s.managed||s.recovery_pending;
+ $("setup-connect").textContent=s.managed?"已接入":"一键接入 Codex";
+ $("setup-restore").disabled=!s.recovery_pending;
+ $("setup-location").textContent=`配置目录：${s.codex_home}${s.profile?" · Profile："+s.profile:""}${s.upstream_host?" · 上游："+s.upstream_host:""}${s.connection?" · "+s.connection:""}。不会更改原模型或系统代理。`;
+}
+$("proxy-mode").addEventListener("change",()=>{$("proxy-input").hidden=$("proxy-mode").value!=="manual";});
+$("setup-connect").addEventListener("click",()=>guarded(async()=>{
+ $("setup-message").textContent="正在识别连接并备份配置……";
+ try{await api("setup/connect",{confirm:true,proxy_mode:$("proxy-mode").value,proxy:$("setup-proxy").value.trim()});await refresh();}
+ catch(e){$("setup-message").textContent=e.message;throw e;}
+}));
+$("setup-restore").addEventListener("click",()=>guarded(async()=>{await api("setup/restore",{confirm:true});await refresh();}));
+$("setup-stop").addEventListener("click",()=>guarded(async()=>{
+ await api("setup/stop",{confirm:true});token="";sessionStorage.removeItem(storageKey);
+ $("setup-message").textContent="已恢复原连接并退出。重启 Codex 后按原来的方式使用；下次双击启动即可。";
+ $("setup-title").textContent="已退出";$("state").textContent="服务已停止";
+ for(const id of ["setup-connect","setup-restore","setup-stop","toggle","save-force"])$(id).disabled=true;
+}));

@@ -11,6 +11,9 @@ import (
 // Options selects the profile used by the Codex invocation. An empty Profile
 // follows the config's default profile, if any; it never guesses from the list.
 type Options struct {
+	// PreserveModel is for record-only onboarding: never select a different model.
+	PreserveModel bool
+
 	Profile  string
 	AuthMode string
 	// Model chooses the managed model. Empty keeps the Astra default.

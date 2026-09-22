@@ -18,6 +18,10 @@ import (
 )
 
 type Engine struct {
+	connectionMu sync.RWMutex
+	setup        *SetupController
+	launch       launchTicket
+
 	overrideMu sync.RWMutex
 	override   ModelOverridePolicy
 	config     Config
@@ -39,11 +43,7 @@ func New(c Config) (*Engine, error) {
 		return nil, err
 	}
 	target, _ := url.Parse(c.Upstream)
-	tr := &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: time.Duration(c.HeaderTimeoutSeconds) * time.Second, ExpectContinueTimeout: time.Second, DisableCompression: true, DisableKeepAlives: true, ForceAttemptHTTP2: false}
-	if c.ProxyURL != "" {
-		p, _ := url.Parse(c.ProxyURL)
-		tr.Proxy = http.ProxyURL(p)
-	}
+	tr := recorderTransport(c)
 	e := &Engine{config: c, target: target, transport: tr, store: store, token: rand.Text(), slots: make(chan struct{}, c.MaxConcurrent)}
 	e.override = ModelOverridePolicy{Enabled: c.ForceModelEnabled, Model: c.ForceModel, Revision: 1}
 	e.enabled.Store(true)
@@ -62,7 +62,12 @@ func (e *Engine) Status() map[string]any {
 	out["model_override"] = e.ModelOverride()
 	out["mode"] = e.config.Mode
 	out["inflight"] = e.active.Load()
-	out["upstream_origin"] = e.config.Upstream
+	e.connectionMu.RLock()
+	out["upstream_origin"] = e.target.String()
+	e.connectionMu.RUnlock()
+	if e.setup != nil {
+		out["setup"] = e.setup.Status()
+	}
 	out["actual_execution_verified"] = false
 	return out
 }
@@ -110,6 +115,17 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e.admin(w, r)
 		return
 	}
+	if e.setup != nil {
+		e.setup.mu.RLock()
+		defer e.setup.mu.RUnlock()
+		if err := e.setup.admit(); err != nil {
+			localError(w, 409, "codex_connection_needs_attention")
+			return
+		}
+	}
+	e.connectionMu.RLock()
+	target, transport := e.target, e.transport
+	e.connectionMu.RUnlock()
 	if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" {
 		localError(w, 403, "native_clients_only")
 		return
@@ -148,7 +164,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		id = hex.EncodeToString(raw)
 		w.Header().Set("X-Recorder-Request-Id", id)
 	}
-	rec := Record{Context: contextFrom(r.Header, e.config.RouteLabel), Schema: 1, ID: id, Started: started.UTC(), Mode: e.config.Mode, Method: r.Method, URI: recordedURI(r.URL, e.config.Mode == "full"), Upstream: e.config.Upstream, IncomingHeaders: r.Header.Clone(), Outcome: "http_complete"}
+	rec := Record{Context: contextFrom(r.Header, e.config.RouteLabel), Schema: 1, ID: id, Started: started.UTC(), Mode: e.config.Mode, Method: r.Method, URI: recordedURI(r.URL, e.config.Mode == "full"), Upstream: target.String(), IncomingHeaders: r.Header.Clone(), Outcome: "http_complete"}
 	rec.ModelOverride = ModelOverrideAudit{Policy: policy, Eligible: modelOverrideEndpoint(r.Method, r.URL.Path)}
 	var incoming *captured
 	var errMu sync.Mutex
@@ -198,9 +214,9 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.Out.URL.Scheme = e.target.Scheme
-			pr.Out.URL.Host = e.target.Host
-			pr.Out.Host = e.target.Host
+			pr.Out.URL.Scheme = target.Scheme
+			pr.Out.URL.Host = target.Host
+			pr.Out.Host = target.Host
 			pr.Out.URL.RawQuery = pr.In.URL.RawQuery
 			pr.Out.Header.Del("Proxy-Authorization")
 			pr.Out.Header.Del("X-Recorder-Token")
@@ -215,7 +231,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else {
 				a.feed(nil, io.EOF)
 			}
-			resp, err := e.transport.RoundTrip(req)
+			resp, err := transport.RoundTrip(req)
 			if err != nil {
 				setFailure("upstream_transport_error")
 				return nil, err
